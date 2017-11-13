@@ -1,10 +1,24 @@
 <style>
     body {
         font-family: "Comic Sans MS";
-        background-color:red;
+        background-color:greenyellow;
     }
+    @keyframes example {
+        0% {color: blue;left:0px; top:0px;}
+        25% {color: brown;left:0px; top:30vh;}
+        50% {color: green;left:0px; top:90vh;}
+        100% {color: red;left:0px; top:0px;}
+    }
+    #wow{
+        animation-name: example;
+        animation-duration: 4s;
+        animation-iteration-count: infinite;
+        position: fixed;
+    }
+}
+
 </style>
 <h1>Official website For Multiple game of the Year winer triple-A 2D-platform game 
     <span style="font-family:'Times New Roman';font-size:50px"><b><u>Suitchi</u></b></span></h1>
 <img src="screenshot.png" style="width:800px;height:450px"/>
-<h2 style="color:yellow;text-decoration:underline">WOw!!!!</h2>
+<h2 id="wow" style="color:yellow;text-decoration:underline">WOw!!!!</h2>
