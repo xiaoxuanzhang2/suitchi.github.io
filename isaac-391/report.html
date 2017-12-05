@@ -1,0 +1,208 @@
+<head>
+  <meta charset="utf-8">
+  <title>Isaac Zhang - Independent Study Report, Fall 2017</title>
+  <link href="https://fonts.googleapis.com/css?family=Faustina" rel="stylesheet">
+  <script src="https://cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js"></script>
+  <script
+    src="https://code.jquery.com/jquery-3.2.1.min.js"
+    integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+    crossorigin="anonymous"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Faustina', serif;
+    }
+    p{
+      width:800px;
+      font-size:17px;
+      line-height: 25px;
+    }
+    h2{
+      margin-top:80px;
+    }
+    pre{
+      width:800px;
+      font-size:15px;
+    }
+    #c1,#c2,#c3,#c4,#c5:hover{
+      cursor: pointer;
+    }
+  </style>
+  <script>
+    $( document ).ready(function(){
+      $('#c1').click(function(){
+        $('html, body').animate({
+        scrollTop: $("#1").offset().top
+        }, 500);
+      });
+      $('#c2').click(function(){
+        $('html, body').animate({
+        scrollTop: $("#2").offset().top
+        }, 500);
+      })
+      $('#c3').click(function(){
+        $('html, body').animate({
+        scrollTop: $("#3").offset().top
+        }, 500);
+      })
+      $('#c4').click(function(){
+        $('html, body').animate({
+        scrollTop: $("#4").offset().top
+        }, 500);
+      })
+      $('#c5').click(function(){
+        $('html, body').animate({
+        scrollTop: $("#5").offset().top
+        }, 500);
+      })
+    })
+  </script>
+</head>
+<body>
+<div style="width:180px;padding-left:20px;height:250px;position:fixed;background-color:rgba(0,0,0,0.1);right:50px;bottom:50px;box-shadow:2px 2px 10px rgba(0,0,0,0.1)">
+<p style="border-bottom:1px solid rgba(0,0,0,0.3);width:130px"><b>Contents</b></p>
+<p style="font-size:15px;line-height: 18px;" id="c1">Introduction</p>
+<p style="font-size:15px;line-height: 18px;" id="c2">Scanning & SLAM</p>
+<p style="font-size:15px;line-height: 18px;" id="c3">Kintinuous & TSDF</p>
+<p style="font-size:15px;line-height: 18px;" id="c4">TSDF Visualization</p>
+<p style="font-size:15px;line-height: 18px;" id="c5">TSDF Subtraction</p>
+</div>
+<div style="background-image:url('p1.png');width:100vw;height:40vh;box-shadow:4px 4px 15px rgba(0,0,0,0.3)"></div>
+<h1 style="margin-left:100px;font-size:36px">Mixed Reality Independent Study Report</h1>
+<hr style="width:50vw;margin-left:100px">
+<div style="margin-left:100px">
+<p>// Isaac Zhang</p>
+<h2 style="margin-top:0;" id="1"><b>Introduction</b></h2>
+<p>
+  As structured light cameras such as Kinect and Intel Realsense are introduced in the market in recent years, reconstruction of the real-world environment in the computers becomes viable. In this independent study project, under the guidance of Prof. Kris Hauser and Phd student Adam Konneker, I explored the methodology for volumetrically representing real-world objects (for instance, output the 3D model of a Rubik's Cube with the scanning data input). In detail, I have used an Intel SR300 camera for depth and color information capture, Kintinuous for scene reconstruction and truncated signed distance function extraction, a TSDF subtraction algorithm for finding the volumetric representation of the target object, and marching cubes algorithm for surface reconstruction and visual representation. Besides the volumetric reconstruction algorithm, I have also collected benchmark indoor scene datasets with Intel SR300 and R200 cameras.
+
+
+</p>
+<h2 id="2"><b>Camera testing & selection, data capturing and SLAM selection </b></h2>
+<p>
+  Structured light cameras utilize a conventional lens, an infrared lens, and an infrared laser projector lens to capture not only color images but also depth information of each pixel, and I used structured light cameras, in particular SR300 and R200, for color and RGB images capturing. Because different sensors have different intrinsic matrices and minimum/maximum capturing distance, it is important to experiment with and select the correct camera for image capturing. Most other sensors have a minimum distance of 1m, for instance Kinect has a minimum distance of 1.4m and ASUS XPro Live has a minimum distance of 0.5m. Given such minimum distances, it is impossible for the camera to capture any depth information on the rail because it is too close to the target object. With a minimum distance of 0.2m, SR300 is the most suitable camera for the experiment given the current settings. R200, the less expensive variant of SR300, has a minimum distance of 0.3m and produces usable dataset. It is used for scene capturing initially.
+</p>
+<p>
+  I have written the driver for Intel R200/SR300 cameras. The driver is able to save the RGB, IR and depth images in designated location and compress the data into a specific klg format file that is used by Kintinuous as input. It is also capable of adjusting parameters for the cameras, such as depth cutoff value, for better depth image quality. The code is available
+  <a href="https://github.com/zhangxiaoxuan1/intel_image_grabber">here</a>.
+</p>
+<p>
+  With the R200 and SR300 cameras I have collected a series of indoor scene color/depth image datasets. The camera rail is semicircle and the camera moves from one end of the rail to another to capture the scene. In most of the scanned scenes there is a target object (Rubik's Cube, wooden block, for instance) placed at the center of the camera rail semi-circle.
+</p>
+<p>
+  SLAM, or simultaneous localization and mapping, constructs an unknown environment while simultaneously keeping track of an agent's location within it. In practice, SLAM processes a stream of color and depth images recorded by the camera as it moves and scans the environment, and outputs a synthesized scene, usually represented by point cloud or surface mesh. There are multiple SLAM libraries available for usage, the most popular of which include Kinfu by PCL, Kintinuous and Elastic Fusion by T. Whelan. While Kinfu only supports Kinect by default and Elastic Fusion only outputs the surface of the reconstruction, Kintinuous supports RGB/depth input from Intel Realsense and utilizes truncated signed distance function matrix for scene integration, and it is thus possible to get volumetric data of the scanned scene from Kintinuous. Thus, we selected Kintinuous as the library for scene integration.
+</p>
+<h2 id="3"><b>TSDF and Kintinuous Processing </b></h2>
+<p>
+  TSDF, or truncated distance function, is a way of reflecting the volume of an object. The TSDF is usually stored as a voxel grid, which represents a cubic physical space with a certain number of voxels per axis. In each voxel there is a float-point value reflecting its distance from the surface. If the value is negative it is inside the surface, and if the value is positive it is outside the surface. Points at which the sign of the distance value changes are called zero crossings, which represent the position of the surface. The absolute value reflects how far away from the actual surface the voxel is. The values range from 1 to -1.
+</p>
+<div>
+  <img src="tsdf.jpg" style="width:400px;height:350px;"></img>
+  <p style="color:grey">Fig 1: TSDF. Image retrieved from <a href="http://pointclouds.org/documentation/tutorials/using_kinfu_large_scale.php">Kinfu Largescale documentation</a></p>
+</div>
+<p>
+  Kintinuous works by incrementally adding “cloud slices” of depth and color information of a part of the scene into a 512*512*512 TSDF matrix stored in GPU memory. By default Kintinuous will shift the scene in the matrix and save what is shifted out in the main memory after surface extraction, but it is possible to disable this movement in “static mode”, which works when the scene is small enough to be contained in a 512*512*512 matrix and shifting will not happen. By default Kintinuous will output the extracted surface of the reconstructed scene using raycast, and there is no way to download the TSDF data. I have modified the Kintinuous code and added a button to the GUI that saves the TSDF matrix saved in the GPU memory when clicked. The saved file is a binary file that represents the 512*512*512 float point matrix. The modified Kintinuous is available
+  <a href="https://github.com/zhangxiaoxuan1/Kintinuous">here</a>.
+</p>
+<h2 id="4"><b>TSDF Visualization</b></h2>
+<p>
+  Truncated signed distance function matrix is a volumetric representation of the object that is mainly used in the academia, and currently there is no library or software that visualizes the TSDF field. In order to visualize the TSDF matrix, we need to first extract the surface represented by the matrix, then convert it into a polygon mesh, and save it in a popular file format that can be opened by visualization software and library. I did a modified version of the marching cubes algorithm to extract the surface polygons. The algorithm divides the TSDF matrix by 1*1*1 cubes, and scans the cubes one by one, extracting surfaces in each small cubes according to the TSDF float point values on the 8 vertices of the cube. For instance, if we have a TSDF cube shown below:
+</p>
+<div>
+  <img src="poly1.gif" style="width:415px;height:214px;"></img>
+  <p style="color:grey">Fig 2: TSDF Cube. Image retrieved from <a href="http://paulbourke.net/geometry/polygonise/">Paul Bourke</a></p>
+</div>
+<p>
+  If vertex 3 has a negative TSDF value and vertices 0 and 2 have positive TSDF values, we know that vertex 3 is below the surface and vertices 0 and 2 are above the surface, and the “zero crossing”, or the actual surface, cuts through edges 2,3, and 11. We would create a triangular facet that goes through edges 2,3, and 11 to represent the surface.
+</p>
+<div>
+  <img src="poly2.gif" style="width:415px;height:214px;"></img>
+  <p style="color:grey">Fig 3: TSDF Surface. Image retrieved from <a href="http://paulbourke.net/geometry/polygonise/">Paul Bourke</a></p>
+</div>
+<p>
+  Marching cubes essentially does this operation to all the cubes in the TSDF matrix to retrieve a coherent, complete surface. It is worth noting that the marching cubes on TSDF is different from the classic marching cubes proposed by WE Lorensen. Because the matrix is “truncated”, the voxels outside the scanned area have values of 0, and because at the boundary of the scene TSDF values jump from very positive (1) to 0, the boundary of the scene will be mapped by classic TSDF, which we do not want in the visual representation. In the interior of the object TSDF field will jump from negative to 0, and we also don’t want to map out a second surface inside the real surface. To address the issue, the modified marching cubes will not map out triangles if the value jump in 2 adjacent vertices is too big (larger than 0.95).
+</p>
+<p>
+  Besides, because a 512*512*512 float-point matrix is large, to address the memory issue, the marching cubes algorithm scans the TSDF matrix layer by layer and create polygons progressively instead of creating the whole matrix in the main memory by creating two 2D arrays representing each layer and move the 2nd layer to the 1st layer before a new layer is scanned and added to the 2nd layer, thus significantly reducing memory usage. There is also another version that naively scans the whole matrix and creates polygons, whose time complexity is lower because there is no need to move layers around. The code is available
+  <a href="https://github.com/zhangxiaoxuan1/tsdfprocessor">here</a>.
+</p>
+<div>
+  <img src="indoor.png" style="width:625px;height:464px;"></img>
+  <p style="color:grey">Fig 4: Marching cubes reconstruction of an indoor scene</p>
+</div>
+<h2 id="5"><b>Scene Subtraction</b></h2>
+<p>
+  It is possible to reconstruct an object in the real world volumetrically by taking two scannings of the same environment with and without the object, and subtract the two TSDF fields. To complete this task, it is important to do two scannings in the exact same locations, with relatively the same speed and in the same direction on the camera rail, so that two scenes can align well and the background objects, such as table and wall, will cancel out in the subtraction. Ideally, after subtraction, the only object left will be the target object added to the scene. Because the TSDF field is “truncated”, there will be a lot of zeros in voxels that are deep inside the surface or outside the boundary of the scene, and because there will be noises in the scene, simple subtraction is not enough to retrieve the target object. We designed an algorithm that synthesizes the two TSDF input matrices, one with the target object and one without, into a single TSDF matrix where there is only the target object in the matrix, or the target object, and the target object only, is represented by negative values. For values of each corresponding voxels of the TSDF with the object and the TSDF without the object, we do the following synthesization:
+</p>
+<pre class="prettyprint">
+function synthesize(v1,v2) {
+  if(v1 != 0 and v2 != 0){
+       return max(v2, -v1);
+   } else {
+       if(v1 != 0){
+           if(v1 < 0.99){
+               return -v1;
+           } else {
+               return 0;
+           }
+       }
+       else{
+           return 0;
+       }
+   }
+}
+</pre>
+<p>
+  The synthesization is visually illustrated as follows:
+</p>
+<div>
+  <img src="il1.png" style="width:732px;height:750px;"></img>
+  <p style="color:grey">Fig 4: The first TSDF matrix : inverted value</p>
+</div>
+<p>
+  The first matrix without the object in it is inverted. Here, white space represents positive values or zeros and black space represents negative values.
+</p>
+<div>
+  <img src="il2.png" style="width:834px;height:750px;"></img>
+  <p style="color:grey">Fig 5: The second TSDF matrix</p>
+</div>
+<p>
+  The second matrix with the object (in this case we have a 2-dimentional cube) is left unchanged. Note that the "ceiling", or the upper boundary of this matrix, is lower than the first matrix.  Also, note that because the matrix is truncated the interior of the object is not negative but has zero values instead. There is in fact only a thin layer of negative values.
+</p>
+<div>
+  <img src="il3.png" style="width:850px;height:175px;"></img>
+  <p style="color:grey">Fig 6: Synthesized matrix</p>
+</div>
+<p>
+  If v1 and v2 are both nonzero, we take the maximum of negative v1 and v2. This makes sure that the outside space is positive and the interior “shell” of the object and the interior of the table is negative (part 2,4,5 in the graph). To account for the interior of the object where we have a bunch of 0, we take the value of negative v1 if v2 is 0 (part 3). Nonetheless, because of scene misalignment, the “ceiling” of the matrices, where values go from positive to zero, is usually not at the same location. it is usually the case that a lot of voxels near the boundaries have values of 0 in the second matrix and positive values in the inverted fist matrix, and they will be mapped to negative values as well (part 6). If we do not prevent this from happening, unwanted surface will be mapped. Moreover, because there are usually more than a few thousand voxels that are misaligned, there will simply be too many negative voxels for the program to process. In order to get rid of these voxels around the surface we assign 0 to voxels where v1 > 0.99 and v2 = 0. This is very extreme and can only happen at the boundary where v1 has values close to 1: the object is near the table and it is impossible for part 3 in the graph to have TSDF values greater than 0.99 in the first matrix. We assign zeros for situations otherwise.
+</p>
+<p>
+  Because the original matrices is 512*512*512 and most of the voxels are zero and irrelevant to our study, after creating the synthesized matrix, my program finds the ranges of x,y,z coordinates of positive/negative voxels and reduced the larger matrix to the smallest matrix that contain all of these values based on the ranges, so as to expedite the following processing. We then proceed to find the target object through a classic connected component algorithm that finds the largest linked negative space in the matrix through a simple depth first search. All of the components will be iterated and indexed, and a new “marker matrix” is created where each voxel, if negative, is assigned the index of the connected component it belongs to, and zero otherwise.
+</p>
+<p>
+  Usually, the largest component found is the target object, but it might happen that random noise is the largest component. My program will display a colorization of  different components at its completion, and the largest component will be white while other components are assigned different colors based on their indices (mod 20). The color table based on to mark different components can be viewed
+  <a href="colorTable.html">here</a>.
+</p>
+<p>
+  In case the largest component is produced by noise and the target object is the second or third largest, user can manually specify the index of the target index by providing it as a parameter when running the program with a “-l” tag(./tsdf -l 257). The program will print the indices of top 10 largest components, and user can thus know the index of the target object through its color. For instance, if the top 10 largest components are 267, 100, 365, 19... and the target object has color cyan, which corresponds to 0 in the table, we know target index % 20 = 0, so the target index is 100.
+</p>
+<div>
+  <img src="noise.jpeg" style="width:664px;height:418px;"></img>
+  <p style="color:grey">Fig 7: Sample output. In this example the largest component, shown in white, is not
+  the target object. The target object is a cube and is shown in pink. It is the second largest connected component.</p>
+</div>
+<p>
+  To visualize the target object we send both the synthesized TSDF matrix and the marker matrix to marching cubes. The marching cubes algorithm here is similar to the marching cubes for visualizing a single TSDF field mentioned earlier, but it takes in two matrices and does not do value jump filtering. Here, if the cube being processed does not have the target object’s index in the marker matrix, the cube does not belong to the target object and will not be processed. Thus, the program reconstructs the surface of the target object only. The complete code is available
+  <a href="https://github.com/zhangxiaoxuan1/TSDFSubtraction">here</a>.
+</p>
+<div>
+  <img src="cube1.png" style="width:400px;height:332px;"></img>
+  <p style="color:grey">Fig 8: Reconstruction of a cube</p>
+</div>
+<h2><b>Conclusion</b></h2>
+<p style="margin-bottom:200px">
+  Although this independent study has successfully produced volumetric representation of the target objects in the scene, the accuracy of the reconstruction is highly dependent on the accuracy of the SLAM reconstruction and the accuracy of the cameras. Firstly, the camera used directly influences the depth data retrieved, and in many cases if the object’s texture is too reflective or the object is too close/far from the camera the camera cannot capture sufficient depth information to reproduce a coherent object surface. The SLAM fuses the depth information captured in different frames into a single scene, and usually it requires the camera to move steadily and at constant speed, which means that the experiment can only conducted on camera rail and many trials might be needed before the SLAM’s recreation is good enough, and causes much inconvenience. Nonetheless, as technology advances and the libraries we have access to improve in accuracy, it is expected that the algorithm this study will improve in accuracy and ease of use.
+</p>
+
+</div>
+</body>
